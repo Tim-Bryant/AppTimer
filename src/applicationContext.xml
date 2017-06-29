@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xmlns:p="http://www.springframework.org/schema/p" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:aop="http://www.springframework.org/schema/aop" xmlns:tx="http://www.springframework.org/schema/tx"
+
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+			http://www.springframework.org/schema/beans/spring-beans-4.1.xsd
+			http://www.springframework.org/schema/context 
+			http://www.springframework.org/schema/context/spring-context-4.1.xsd
+			http://www.springframework.org/schema/aop 
+			http://www.springframework.org/schema/aop/spring-aop-4.1.xsd
+			http://www.springframework.org/schema/tx 
+			http://www.springframework.org/schema/tx/spring-tx-4.1.xsd
+			http://www.springframework.org/schema/mvc 
+			http://www.springframework.org/schema/mvc/spring-mvc-4.1.xsd
+			http://www.springframework.org/schema/context 
+			http://www.springframework.org/schema/context/spring-context-4.1.xsd">
+
+	<!-- 定义受环境影响易变的变量 ,放在属性文件中 -->
+	<bean
+		class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+		<property name="systemPropertiesModeName" value="SYSTEM_PROPERTIES_MODE_OVERRIDE" />
+		<property name="ignoreResourceNotFound" value="true" />
+		<property name="locations">
+			<list>
+				<value>classpath*:/application.properties</value>
+			</list>
+		</property>
+	</bean>
+
+	<!-- 配置数据源方式二 DBCP连接池 -->
+	<!--本示例采用DBCP连接池，应预先把DBCP的jar包复制到工程的lib目录下。 -->
+	<!-- BasicDataSource提供了close()方法关闭数据源，所以必须设定destroy-method=”close”属性， 以便Spring容器关闭时，数据源能够正常关闭 -->
+	<bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource"
+		init-method="init" destroy-method="close">
+		<property name="driverClassName" value="${jdbc.driver}" />
+		<property name="url" value="${jdbc.url}" />
+		<property name="username" value="${jdbc.username}" />
+		<property name="password" value="${jdbc.password}" />
+		<!-- Connection Pooling Info -->
+		<property name="initialSize" value="${dbcp.initialSize}" />
+		<property name="maxActive" value="${dbcp.maxActive}" />
+		<property name="maxIdle" value="${dbcp.maxIdle}" />
+		<property name="maxWait" value="1000" />
+		<property name="poolPreparedStatements" value="false" />
+		<property name="defaultAutoCommit" value="false" />
+		<!-- druid特有的监控统计功能 https://github.com/alibaba/druid/wiki/%E9%85%8D%E7%BD%AE_StatFilter -->
+		<property name="filters" value="log4j" />
+		<property name="proxyFilters">
+			<list>
+				<ref bean="stat-filter" />
+			</list>
+		</property>
+	</bean>
+	<!--阿里巴巴数据源Druid 通过proxyFilters属性配置 Druid内置提供一个StatFilter，用于统计监控信息。 -->
+	<bean id="stat-filter" class="com.alibaba.druid.filter.stat.StatFilter">
+		<!-- StatFilter属性slowSqlMillis用来配置SQL慢的标准，执行时间超过slowSqlMillis的就是慢。slowSqlMillis的缺省值为3000，也就是3秒。 -->
+		<property name="slowSqlMillis" value="3000" />
+		<property name="logSlowSql" value="true" />
+	</bean>
+	
+	
+	<!-- Spring JDBC模板操作 -->
+	<bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+		<property name="dataSource" ref="dataSource" />
+	</bean>
+
+	<!-- Lob字段处理 -->
+	<bean id="lobHandler" class="org.springframework.jdbc.support.lob.DefaultLobHandler"
+		lazy-init="true" />
+
+	<!-- 编码工具类 -->
+
+	<!-- 集成Beetlsql框架 ,本Demo用beetlSql取代Hibernate-->
+	<!-- 实体类的以Dao结尾接口会被扫描并且被注入     所在包名,Spring会自动查找下面的类 -->
+	<bean id="beetlSqlScannerConfigurer" class="org.beetl.sql.ext.spring4.BeetlSqlScannerConfigurer">
+		<!-- 哪些类可以自动注入 -->
+		<property name="basePackage" value="com.app.timer.*.dao" />
+		<!-- 通过类的后缀，来自动注入 -->
+		<property name="daoSuffix" value="Dao" />
+		<property name="sqlManagerFactoryBeanName" value="sqlManager" />
+	</bean>
+	<bean id="sqlManager" class="org.beetl.sql.ext.spring4.SqlManagerFactoryBean">
+		<property name="cs">
+			<bean class="org.beetl.sql.ext.spring4.BeetlSqlDataSource">
+				<property name="masterSource" ref="dataSource"></property>
+			</bean>
+		</property>
+		<property name="dbStyle">
+			<bean class="org.beetl.sql.core.db.MySqlStyle" />
+		</property>
+		<property name="sqlLoader">
+			<bean class="org.beetl.sql.core.ClasspathLoader">
+				<property name="sqlRoot" value="/sql"></property>
+			</bean>
+		</property>
+		<!-- 防止表名或者列名的特殊性，故使用JPA方式 -->
+		<property name="nc">
+			<bean class="org.beetl.sql.core.JPA2NameConversion" />
+		</property>
+		<property name="interceptors">
+			<list>
+				<bean class="org.beetl.sql.ext.DebugInterceptor"></bean>
+			</list>
+		</property>
+	</bean>
+</beans>
